@@ -1,0 +1,11 @@
+
+.env
+__pycache__/
+*.pyc
+.DS_Store
+conversations.db
+uploads/
+ngrok.log
+check_models.py
+check_gemini_models.py
+static/response_*.mp3

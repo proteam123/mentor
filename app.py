@@ -17,50 +17,48 @@ database.init_db()
 # Ensure static folder exists
 os.makedirs('static', exist_ok=True)
 
-def get_model():
-    api_key = os.getenv("GEMINI_API_KEY")
+
+from groq import Groq
+
+def get_groq_client():
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        print("WARNING: GEMINI_API_KEY not set. Chat features will not work.")
+        print("WARNING: GROQ_API_KEY not set.")
         return None
-        
-    genai.configure(api_key=api_key)
-    
-    # Get LATEST context every time
-    student_context = database.get_student_context()
-    doc_context = database.get_latest_document_context()
-    
-    system_prompt = f"""
-    You are a helpful Malayalam AI tutor and Faculty Advisor for Class S8 ADS. 
-    Respond in Malayalam. 
-    
-    DATA CONTEXT (Student Records):
-    {student_context}
+    return Groq(api_key=api_key)
 
-    UPLOADED DOCUMENT CONTEXT (If any):
-    {doc_context}
-    
-    INSTRUCTIONS:
-    1. **INTERACTIVE MODE**: Do NOT dump all information at once. Break it down.
-    2. **Step 1: IDENTIFY**: Ask "Who is this parent?" first. Verify against the list.
-    3. **Step 2: NEW UPDATES**: If UPLOADED DOCUMENT CONTEXT is provided, summarize it and share it with the parent first after identification.
-    4. **Step 3: ACADEMICS**: Find the SPECIFIC child for that parent (e.g., Basheer -> Abdullah). Report ONLY that child's results.
-    5. **Step 4: DISCIPLINE**: Discuss ONLY that child's disciplinary record.
-    6. **Step 5: ANNOUNCE**: Finally, mention the Parent Meeting on Jan 25th 2026.
-    
-    Keep responses SHORT (1-2 sentences). Wait for the parent to respond before moving to the next topic.
-    FORMATTING: Do NOT use markdown (like **bold**). Use plain text only.
 
-    METADATA: At the very end of EVERY response, you MUST append a metadata tag in this EXACT format:
-    [[META: ParentName|AttendanceStatus]]
-    - ParentName: Basheer, Rafeek, Aimu, or Unknown.
-    - AttendanceStatus: Confirmed, Declined, or Unknown.
-    Example: നമസ്കാരം! നിങ്ങളുടെ കുട്ടിയുടെ മാർക്കുകൾ പറയാം. [[META: Basheer|Unknown]]
-    """
-    
-    return genai.GenerativeModel(
-        "gemini-flash-lite-latest",  # Lite is fine for chat and saves quota
-        system_instruction=system_prompt
-    )
+
+SYSTEM_PROMPT = """
+You are a helpful Malayalam AI tutor and Faculty Advisor for Class S8 ADS. 
+Respond in Malayalam. 
+
+DATA CONTEXT (Student Records):
+{student_context}
+
+UPLOADED DOCUMENT CONTEXT (LATEST CIRCULAR/NEWS):
+{doc_context}
+
+
+INSTRUCTIONS:
+1. **ROLE**: You are the warm, knowledgeable Faculty Advisor. You know every student's details by heart.
+2. **TONE**: Speak in **NATURAL, SPOKEN MALAYALAM**. Avoid "bookish" or complex words. Use a respectful, warm tone suitable for talking to a parent on the phone. Keep sentences short and clear for the voice assistant to read easily.
+3. **PRIORITY 1: THE UPLOADED DOCUMENT**: If {doc_context} is not empty, you MUST mention this FIRST. "Sir/Madam, I just received this circular: [Summary of doc_context]."
+4. **PRIORITY 2: THE STUDENT**: 
+   - Ask "Who is this parent?" to verify identity.
+   - Once identified (e.g., Basheer), look up their child (Abdullah).
+   - **SYNTHESIZE**: Combine the Document info with the Student's data. 
+     *Example: "The circular warns about exam fees. Since Abdullah has passed all subjects, he just needs to pay the standard fee."*
+   - Report the student's Marks, Discipline, and Attendance CLEARLY.
+5. **PRIORITY 3: RSVP**: Always end by asking if they will attend the meeting on Jan 25th.
+
+Keep responses conversational but accurate.
+FORMATTING: Do NOT use markdown. Plain text only.
+
+METADATA: At the end of EVERY response, append:
+[[META: ParentName|AttendanceStatus]]
+"""
+
 
 import re
 from werkzeug.utils import secure_filename
@@ -74,6 +72,97 @@ from flask import send_from_directory
 def uploaded_file(filename):
     return send_from_directory('uploads', filename)
 
+
+
+
+
+import base64
+
+
+from pdf2image import convert_from_path
+import io
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def process_file_monitor(filepath):
+    """
+    Analyzes file using Groq Vision.
+    Converts PDF to images first.
+    Returns: (extracted_text, error_message)
+    """
+    try:
+        # Determine file type
+        ext = filepath.lower().split('.')[-1]
+        
+        base64_image = None
+        
+        if ext in ['jpg', 'jpeg', 'png', 'webp']:
+            base64_image = encode_image(filepath)
+            
+        elif ext == 'pdf':
+            print("PDF detected. Converting to image for Groq Vision...")
+            try:
+                # Convert first page to image
+                images = convert_from_path(filepath)
+                if not images:
+                    return None, "Empty PDF."
+                
+                # Take first page
+                img = images[0]
+                
+                # Save to bytes
+                img_byte_arr = io.BytesIO()
+                img.save(img_byte_arr, format='JPEG')
+                img_byte_arr = img_byte_arr.getvalue()
+                
+                base64_image = base64.b64encode(img_byte_arr).decode('utf-8')
+                print("PDF converted to image successfully.")
+                
+            except Exception as pdf_err:
+                 return None, f"PDF Conversion Error: {str(pdf_err)}. Install poppler."
+        else:
+            return None, "Unsupported file format. Please use JPG, PNG, or PDF."
+
+        if base64_image:
+            # Use Groq Vision (Llama 3.2 11B Vision)
+            client = get_groq_client()
+            if not client:
+                return None, "Groq API Key missing."
+
+
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Analyze this student document. Extract Name, Marks, Attendance, and Disciplinary info. Summarize in 2-3 Malayalam sentences."},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                },
+                            },
+                        ],
+                    }
+                ],
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            )
+            extracted_text = chat_completion.choices[0].message.content
+            print(f"Groq Vision extracted: {extracted_text}")
+
+            # Update Context
+            database.add_document_context(extracted_text)
+            return extracted_text, None
+            
+        return None, "Processing failed."
+
+    except Exception as e:
+        return None, f"Analysis Error: {str(e)}"
+
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -86,62 +175,34 @@ def upload_file():
     filepath = os.path.join('uploads', filename)
     file.save(filepath)
 
-    try:
-        # 1. Upload to Gemini
-        gen_file = genai.upload_file(path=filepath)
-        
-        # 2. Polling for file state (Important for PDFs)
-        import time
-        for _ in range(10):  # Wait up to 20 seconds
-            gen_file = genai.get_file(gen_file.name)
-            if gen_file.state.name == "ACTIVE":
-                break
-            if gen_file.state.name == "FAILED":
-                raise Exception("File processing failed on Google side.")
-            print(f"File state: {gen_file.state.name}. Waiting...")
-            time.sleep(2)
-
-        # 3. Ask AI to summarize/OCR
-        try:
-            summary_model = genai.GenerativeModel("gemini-2.0-flash")
-            response = summary_model.generate_content([
-                "Read this document and summarize the key information a parent should know in 2 clear Malayalam sentences. Be extremely concise. Focus on names and specific instructions.",
-                gen_file
-            ])
-        except Exception as model_err:
-            print(f"Primary model failed (2.0-flash): {model_err}. Trying fallback...")
-            summary_model = genai.GenerativeModel("gemini-flash-latest")
-            response = summary_model.generate_content([
-                "Read this document and summarize the key information a parent should know in 2 clear Malayalam sentences. Be extremely concise. Focus on names and specific instructions.",
-                gen_file
-            ])
-        
-        extracted_text = response.text
-        if not extracted_text:
-            raise Exception("AI returned empty summary. Try again.")
-            
-        print(f"Extracted info: {extracted_text}")
-        
-        # 4. Save to DB context
-        database.add_document_context(extracted_text)
-        
-        # Clean up
-        genai.delete_file(gen_file.name)
-        
-        return jsonify({
-            "message": "File uploaded and context updated!",
-            "learned": extracted_text,
-            "file_url": url_for('uploaded_file', filename=filename)
-        })
-    except Exception as e:
-        error_str = str(e)
-        print(f"Upload Error: {error_str}")
-        if "429" in error_str:
+    extracted_text, error = process_file_monitor(filepath)
+    
+    if error:
+        err_str = str(error)
+        print(f"Upload Error: {err_str}")
+        if "429" in err_str:
             return jsonify({"error": "Quota exceeded. Please wait 1 minute and try again."}), 429
-        return jsonify({"error": f"OCR Error: {error_str}"}), 500
+        return jsonify({"error": f"OCR Error: {err_str}"}), 500
+        
+    return jsonify({
+        "message": "File uploaded and context updated!",
+        "learned": extracted_text,
+        "file_url": url_for('uploaded_file', filename=filename)
+    })
 
-client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
+
+# Twilio Setup
+account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+api_key_sid = os.getenv("TWILIO_API_KEY_SID")
+api_secret = os.getenv("TWILIO_API_KEY_SECRET")
+auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+if api_key_sid and api_secret:
+    client = Client(api_key_sid, api_secret, account_sid)
+else:
+    client = Client(account_sid, auth_token)
+
 
 def generate_audio(text):
     try:
@@ -179,50 +240,156 @@ def start_conversation():
         "audio_url": audio_url
     })
 
+
 @app.route('/notify_parent', methods=['POST'])
 def notify_parent():
-    parent_number = request.form['parent_number']
-    message = "നമസ്കാരം! നിങ്ങളുടെ കുട്ടി ഇന്നത്തെ ക്ലാസിൽ പങ്കെടുക്കാനായില്ല."
+    parent_number = request.form.get('parent_number')
+    if not parent_number:
+         return "Error: parent_number required", 400
 
-    call = client.calls.create(
-        from_=twilio_number,
-        to=parent_number,
-        twiml=f'<Response><Say language="ml-IN" voice="Google.ml-IN-Standard-A">{message}</Say></Response>'
-    )
-    return f"Call initiated! SID: {call.sid}"
+    # Ensure we have a public URL for Twilio to reach us
+    # If using ngrok, user should set PUBLIC_URL or we rely on request.url_root if proxied correctly
+    # For local dev without env var, this might fail on Twilio side (HTTP 11200)
+    
+    # We use the /twilio/voice endpoint as the handler
+    webhook_url = url_for('twilio_voice_webhook', _external=True)
+    
+    # If running locally behind ngrok manually, url_for might still say localhost.
+    # Allow override via env
+    public_url_base = os.getenv("PUBLIC_URL")
+    if public_url_base:
+        webhook_url = f"{public_url_base}/twilio/voice"
+
+    print(f"Initiating call to {parent_number} with webhook: {webhook_url}")
+
+    try:
+        call = client.calls.create(
+            from_=twilio_number,
+            to=parent_number,
+            url=webhook_url
+        )
+        return f"Call initiated! SID: {call.sid}"
+    except Exception as e:
+        return f"Failed to initiate call: {str(e)}", 500
+
+
+@app.route('/twilio/voice', methods=['POST'])
+def twilio_voice_webhook():
+    """Handles the TwiML for the interactive voice call."""
+    user_speech = request.form.get('SpeechResult')
+    
+    # Construct absolute URL for the action
+    # This prevents any localhost/relative path issues
+    public_url_base = os.getenv("PUBLIC_URL")
+    if public_url_base:
+        # Ensure no trailing slash
+        if public_url_base.endswith('/'):
+            public_url_base = public_url_base[:-1]
+        action_url = f"{public_url_base}/twilio/voice"
+    else:
+        # Fallback to external url_for (works if Host header is forwarded correctly)
+        action_url = url_for('twilio_voice_webhook', _external=True)
+
+    
+    if not user_speech:
+        # Case A: Start of Call OR No Input Detected (Twilio Loop)
+        # Check if this is a "re-prompt" due to no input (Twilio sends digits/speech empty)
+        # We can check 'CallStatus'. But simpler: if no speech, just greet or re-prompt.
+        
+        # We can differntiate Start vs Loop using a query param or cookie, but simple is fine:
+        # If it's the very first request (Start), we greet.
+        # IF it's a loop (user stayed silent), we ask "Are you there?" (Simple logic: Random/Context)
+        # For simplicity: Just Greet/Prompt always.
+        
+        ai_text = "നമസ്കാരം! ഇത് ആരാണ്? ഏത് കുട്ടിയുടെ രക്ഷിതാവാണ്? (Hello! Who is this?)"
+        print("AI: Greeting/Prompting...")
+    else:
+        # Case B: User Spoke
+        print(f"User said (Call): {user_speech}")
+        
+        # Get AI Response
+        result, error = get_ai_response(user_speech)
+        
+        if error:
+            ai_text = "ക്ഷമിക്കണം, സാങ്കേതിക തകരാർ സംഭവിച്ചു." 
+            print(f"Call AI Error: {error}")
+        else:
+            ai_text = result['response']
+
+    print(f"AI Replying (Call): {ai_text}")
+
+    # Build TwiML
+    # 1. Say Response
+    # 2. Gather (Listen)
+    # 3. If no input -> Loop back to this webhook (Twilio executes next verb)
+    #    Actually, <Gather> action handles success. 
+    #    If *no* input, it falls through. We should Redirect back to Prompt? 
+    #    Or say "Goodbye". Let's Redirect back to listen again once.
+    
+
+
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say language="ml-IN" voice="Google.ml-IN-Standard-A">{ai_text}</Say>
+    <Gather input="speech" action="{action_url}" language="ml-IN" timeout="5" speechTimeout="auto">
+    </Gather>
+    <Say language="ml-IN">Are you there? I did not hear you.</Say>
+    <Redirect>{action_url}</Redirect>
+</Response>"""
+    
+    return twiml_response, 200, {'Content-Type': 'application/xml'}
+
+
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_text = data.get('text')
-    if not user_text:
-        return jsonify({"error": "No text provided"}), 400
 
-    model = get_model()
-    if not model:
-        return jsonify({"error": "Gemini API key not configured on server"}), 500
+
+
+def get_ai_response(user_text):
+    # Retrieve Gemini Key
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None, "Gemini API key not configured"
+    
+    genai.configure(api_key=api_key)
 
     try:
         # 1. Fetch recent history from DB
         past_convos = database.get_conversations()
+        
+        # Build History for Gemini (User/Model format)
         history = []
         recent_convos = past_convos[:10][::-1]
         for row in recent_convos:
             history.append({"role": "user", "parts": [row[1]]})
             history.append({"role": "model", "parts": [row[2]]})
+            
+        # Dynamic System Prompt
+        student_context = database.get_student_context()
+        doc_context = database.get_latest_document_context()
+        formatted_system_prompt = SYSTEM_PROMPT.format(
+            student_context=student_context,
+            doc_context=doc_context
+        )
 
-        # 2. Start chat session
-        chat_session = model.start_chat(history=history)
+
+
+        # 2. Call Gemini
+        # Use a model known for good multilingual support
+        model = genai.GenerativeModel(
+            "gemini-2.0-flash", # Switch to correct 2.0 flash
+            system_instruction=formatted_system_prompt
+        )
         
-        # 3. Generate response (Single Call!)
+        chat_session = model.start_chat(history=history)
         response = chat_session.send_message(user_text)
+        
         raw_ai_response = response.text
         
-        # 4. Extract Metadata
+        # 3. Extract Metadata
         ai_response = raw_ai_response
         meta_match = re.search(r'\[\[META:\s*(.*?)\|(.*?)\]\]', raw_ai_response)
         
@@ -237,20 +404,34 @@ def chat():
             # Clean response for user/TTS
             ai_response = re.sub(r'\[\[META:.*?\]\]', '', raw_ai_response).strip()
 
-        # 5. Save turn to DB
+        # 4. Save turn to DB
         database.add_conversation(user_text, ai_response)
         
         audio_url = generate_audio(ai_response)
         
-        return jsonify({
+        return {
             "response": ai_response,
             "audio_url": audio_url
-        })
+        }, None
     except Exception as e:
-        error_msg = str(e)
-        if "429" in error_msg or "Resource has been exhausted" in error_msg:
+        return None, str(e)
+
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_text = data.get('text')
+    if not user_text:
+        return jsonify({"error": "No text provided"}), 400
+
+    result, error = get_ai_response(user_text)
+    
+    if error:
+        if "429" in error or "Resource has been exhausted" in error:
             return jsonify({"error": "Quota exceeded. Please wait ~1 minute and try again."}), 429
-        return jsonify({"error": f"Server Error: {error_msg}"}), 500
+        return jsonify({"error": f"Server Error: {error}"}), 500
+
+    return jsonify(result)
 
 @app.route('/get_context')
 def get_context():
@@ -263,4 +444,4 @@ def report():
     return render_template('report.html', students=students)
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5001, debug=True)

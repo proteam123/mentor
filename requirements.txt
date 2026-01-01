@@ -2,3 +2,6 @@ google-generativeai
 flask
 python-dotenv
 twilio
+python-telegram-bot
+groq
+pdf2image
