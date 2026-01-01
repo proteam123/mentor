@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Attendance Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #F3EFE9;
+            --text-color: #1A1A1A;
+            --card-bg: #FFFFFF;
+            --accent-green: #2D9C5F;
+            --accent-red: #E74C3C;
+            --accent-gray: #666;
+            --radius: 20px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            margin: 0;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background: #F8F9FA;
+            padding: 1.2rem;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            border-bottom: 1px solid #EEE;
+        }
+
+        td {
+            padding: 1.2rem;
+            border-bottom: 1px solid #F5F5F5;
+            font-size: 1rem;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .badge.confirmed {
+            background: #E8F5E9;
+            color: var(--accent-green);
+        }
+
+        .badge.declined {
+            background: #FFEBEE;
+            color: var(--accent-red);
+        }
+
+        .badge.unknown {
+            background: #F5F5F5;
+            color: var(--accent-gray);
+        }
+
+        .btn-back {
+            text-decoration: none;
+            color: #000;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>Meeting RSVP List</h1>
+        <a href="/" class="btn-back">← Back to Tutor</a>
+    </div>
+
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Roll #</th>
+                    <th>Student Name</th>
+                    <th>Parent Name</th>
+                    <th>Attendance Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td>{{ student[2] }}</td>
+                    <td style="font-weight: 600;">{{ student[0] }}</td>
+                    <td>{{ student[1] }}</td>
+                    <td>
+                        <span class="badge {{ student[3].lower() }}">
+                            {{ student[3] }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</body>
+
+</html>

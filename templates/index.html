@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malayalam AI Tutor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #F3EFE9;
+            --text-color: #1A1A1A;
+            --card-bg: #FFFFFF;
+            --accent-color: #2D9C5F;
+            /* Green from reference */
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            --radius: 24px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .header {
+            width: 100%;
+            padding: 2rem 4rem;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            background: #000;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-top: 2rem;
+            margin-bottom: 3rem;
+            padding: 0 1rem;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin: 0 0 1rem 0;
+            letter-spacing: -0.04em;
+        }
+
+        p.subtitle {
+            font-size: 1.1rem;
+            color: #666;
+            margin: 0;
+        }
+
+        /* Main Card Container */
+        .container {
+            width: 90%;
+            max-width: 600px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 2rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            height: 60vh;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Status Pill */
+        #status {
+            align-self: flex-start;
+            background: #F0F0F0;
+            color: #555;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* Conversation Area */
+        .conversation {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-right: 10px;
+        }
+
+        .message {
+            padding: 12px 18px;
+            border-radius: 18px;
+            font-size: 1rem;
+            line-height: 1.5;
+            max-width: 85%;
+        }
+
+        .message.ai {
+            background-color: #F8F9FA;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.user {
+            background-color: #1A1A1A;
+            color: #FFF;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.system {
+            align-self: center;
+            background: transparent;
+            color: #888;
+            font-size: 0.8rem;
+            border: 1px solid #eee;
+        }
+
+        /* Floating Action Button */
+        .mic-btn {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(45, 156, 95, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        /* Expanded Start Button (Before conversation) */
+        .mic-btn.start-mode {
+            width: auto;
+            border-radius: 30px;
+            padding: 0 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .mic-btn:hover {
+            transform: scale(1.05);
+            background: #24824d;
+        }
+
+        .mic-btn.listening {
+            background-color: #E74C3C;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 15px rgba(231, 76, 60, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+
+        /* NEW: Teacher Panel Styles */
+        .teacher-panel {
+            background: #f8f9fa;
+            border: 1px dashed #ced4da;
+            padding: 1.5rem;
+            border-radius: 15px;
+            margin: 2rem auto;
+            max-width: 500px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone {
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 1px solid #eee;
+            color: #2D9C5F;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .upload-zone:hover {
+            background: #f1f8f4;
+            border-color: #2D9C5F;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2px solid #2D9C5F;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* NEW: Live Scanner Animation */
+        .teacher-panel {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scanner-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, transparent, #2D9C5F, transparent);
+            box-shadow: 0 0 15px #2D9C5F;
+            z-index: 5;
+            display: none;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0;
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-accent {
+            background: #000;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="logo"><span>AI</span> Mentora</div>
+        <div style="font-weight: 600; font-size: 0.9rem;">S8 ADS</div>
+    </div>
+
+    <div class="hero">
+        <h1>Providing Help<br>During Challenging Times</h1>
+        <p class="subtitle">Your Personal Malayalam AI Tutor & Advisor</p>
+
+        <!-- NEW: Teacher's Update Corner -->
+        <div class="teacher-panel" id="teacherPanel">
+            <div class="scanner-bar" id="scannerBar"></div>
+            <h3>Teacher's Update Corner</h3>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 12px;">Upload images or PDFs to update the AI's
+                knowledge.</p>
+            <div class="upload-zone" id="uploadZone">
+                <span id="uploadStatus">Click or Drag to Upload Note (PDF/Image)</span>
+                <input type="file" id="fileInput" hidden accept="image/*,application/pdf">
+            </div>
+            <!-- NEW: Learned Info Display -->
+            <div id="learnedInfoBox"
+                style="display: none; margin-top: 15px; padding: 12px; background: #fff; border-radius: 10px; border-left: 4px solid #2D9C5F; text-align: left; font-size: 0.9rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <strong style="color: #2D9C5F;">AI Learned This:</strong>
+                    <button onclick="clearContext()"
+                        style="background: none; border: none; color: #E74C3C; font-size: 0.7rem; cursor: pointer;">Clear
+                        X</button>
+                </div>
+                <span id="learnedInfoText"></span>
+
+                <!-- NEW: File Preview -->
+                <div id="filePreview"
+                    style="margin-top: 10px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; max-height: 150px; display: none;">
+                    <img id="previewImg" style="width: 100%; height: auto; display: none;" src="" alt="Preview">
+                    <a id="previewLink"
+                        style="display: block; padding: 10px; color: #666; text-decoration: none; font-size: 0.8rem;"
+                        href="#" target="_blank">📄 View PDF</a>
+                </div>
+            </div>
+            <button onclick="checkLastContext()"
+                style="margin-top: 10px; background: none; border: none; color: #666; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">Check
+                Last Update</button>
+        </div>
+
+        <div class="hero-actions">
+            <button class="btn btn-primary" id="start-btn-hero" onclick="startConversation()">Start Conversation
+                ↗</button>
+            <a href="/report" class="btn btn-accent">View RSVP Report</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="status">Ready to start</div>
+
+        <div class="conversation" id="conversation">
+            <!-- Messages will appear here -->
+        </div>
+
+        <button id="start-btn" class="mic-btn start-mode">
+            Start Conversation ↗
+        </button>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('start-btn');
+        const statusEl = document.getElementById('status');
+        const conversationEl = document.getElementById('conversation');
+
+        // Web Speech API
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Your browser does not support Speech Recognition. Please use Chrome.");
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ml-IN';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        let isListening = false;
+
+        startBtn.addEventListener('click', async () => {
+            if (startBtn.textContent.includes('Start Conversation')) {
+                // Initial Start
+                startBtn.disabled = true;
+                statusEl.textContent = "Starting...";
+                await startConversation();
+            } else {
+                // Manual Mic Trigger (if needed later)
+                startListening();
+            }
+        });
+
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const scannerBar = document.getElementById('scannerBar');
+
+        uploadZone.onclick = () => fileInput.click();
+
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadStatus.innerHTML = '<span class="loading-spinner"></span> Scanning...';
+            scannerBar.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.status === 429) {
+                    handleUploadQuotaError();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.learned) {
+                    uploadStatus.innerHTML = '✅ Upload Successful';
+                    uploadStatus.style.color = '#2D9C5F';
+
+                    // Show full learned text
+                    const learnedBox = document.getElementById('learnedInfoBox');
+                    const learnedText = document.getElementById('learnedInfoText');
+                    learnedText.textContent = data.learned;
+                    learnedBox.style.display = 'block';
+
+                    // Show file preview
+                    const filePreview = document.getElementById('filePreview');
+                    const previewImg = document.getElementById('previewImg');
+                    const previewLink = document.getElementById('previewLink');
+                    filePreview.style.display = 'block';
+
+                    if (data.file_url) {
+                        if (data.file_url.toLowerCase().endsWith('.pdf')) {
+                            previewImg.style.display = 'none';
+                            previewLink.style.display = 'block';
+                            previewLink.href = data.file_url;
+                        } else {
+                            previewImg.style.display = 'block';
+                            previewImg.src = data.file_url;
+                            previewLink.style.display = 'none';
+                        }
+                    }
+                } else {
+                    uploadStatus.innerHTML = '❌ Error: ' + data.error;
+                    uploadStatus.style.color = '#E74C3C';
+                }
+            } catch (err) {
+                uploadStatus.innerHTML = '❌ Upload Failed';
+            } finally {
+                scannerBar.style.display = 'none';
+            }
+        };
+
+        function handleUploadQuotaError() {
+            let seconds = 60;
+            const timer = setInterval(() => {
+                uploadStatus.innerHTML = `⚠️ Quota Exceeded. Retry in ${seconds}s...`;
+                uploadStatus.style.color = '#E74C3C';
+                seconds--;
+                if (seconds < 0) {
+                    clearInterval(timer);
+                    uploadStatus.innerHTML = "Click or Drag to Upload Note (PDF/Image)";
+                    uploadStatus.style.color = '#2D9C5F';
+                }
+            }, 1000);
+        }
+
+        async function checkLastContext() {
+            const response = await fetch('/get_context');
+            const data = await response.json();
+            if (data.context) {
+                const learnedBox = document.getElementById('learnedInfoBox');
+                const learnedText = document.getElementById('learnedInfoText');
+                learnedText.textContent = data.context;
+                learnedBox.style.display = 'block';
+            } else {
+                alert("No previous updates found.");
+            }
+        }
+
+        function clearContext() {
+            document.getElementById('learnedInfoBox').style.display = 'none';
+        }
+
+        async function startConversation() {
+            try {
+                const response = await fetch('/start_conversation', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.response) {
+                    addMessage(data.response, 'ai');
+
+                    if (data.audio_url) {
+                        playAudio(data.audio_url, () => {
+                            startListening();
+                        });
+                    } else {
+                        // Fallback if no audio
+                        startListening();
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                if (e.message.includes("429") || e.message.includes("Quota")) {
+                    handleQuotaError();
+                } else {
+                    statusEl.textContent = "Error starting conversation.";
+                }
+                startBtn.disabled = false;
+            }
+        }
+
+        function handleQuotaError() {
+            let seconds = 60;
+            const timer = setInterval(() => {
+                statusEl.textContent = `Quota Exceeded. Retrying in ${seconds}s...`;
+                seconds--;
+                if (seconds < 0) {
+                    clearInterval(timer);
+                    statusEl.textContent = "Ready to try again.";
+                }
+            }, 1000);
+        }
+
+        function startListening() {
+            if (isListening) return;
+            try {
+                recognition.start();
+                statusEl.textContent = "Listening (Listening)...";
+                startBtn.classList.add('listening');
+                startBtn.innerHTML = "🎤 Listening...";
+                startBtn.disabled = true; // Disable until done
+                isListening = true;
+            } catch (e) {
+                console.error("Mic error:", e);
+                isListening = false;
+            }
+        }
+
+        recognition.onresult = (event) => {
+            const last = event.results.length - 1;
+            const text = event.results[last][0].transcript;
+            statusEl.textContent = "Processing...";
+            addMessage(text, 'user');
+            sendToBackend(text);
+        };
+
+        recognition.onspeechend = () => {
+            recognition.stop();
+            startBtn.classList.remove('listening');
+            startBtn.disabled = false;
+            startBtn.innerHTML = "🎤 Tap to Speak"; // Change button state
+            isListening = false;
+        };
+
+        recognition.onerror = (event) => {
+            statusEl.textContent = 'Error occurred in recognition: ' + event.error;
+            startBtn.classList.remove('listening');
+            startBtn.disabled = false;
+        };
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.classList.add('message');
+            div.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
+            div.textContent = text;
+            conversationEl.appendChild(div);
+            // Scroll to bottom
+            div.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function sendToBackend(text) {
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await response.json();
+
+                if (data.response) {
+                    addMessage(data.response, 'ai');
+
+                    if (data.audio_url) {
+                        playAudio(data.audio_url, () => {
+                            // startListening(); // Optional loop
+                        });
+                    }
+                    statusEl.textContent = "Done.";
+                } else {
+                    const errorMsg = data.error || "Unknown error from server.";
+                    if (errorMsg.includes("Quota")) {
+                        handleQuotaError();
+                    } else {
+                        statusEl.textContent = errorMsg;
+                    }
+                    addMessage(`Error: ${errorMsg}`, 'system');
+                }
+            } catch (e) {
+                console.error(e);
+                statusEl.textContent = "Network error.";
+            }
+        }
+
+        function playAudio(url, onEndCallback) {
+            statusEl.textContent = "Playing Audio...";
+            const audio = new Audio(url);
+
+            audio.onended = () => {
+                statusEl.textContent = "Finished speaking.";
+                if (onEndCallback) onEndCallback();
+            };
+
+            audio.onerror = (e) => {
+                console.error("Audio playback error", e);
+                statusEl.textContent = "Audio error.";
+                // Fallback to mic even if audio fails
+                if (onEndCallback) onEndCallback();
+            };
+
+            audio.play().catch(e => {
+                console.error("Autoplay blocked?", e);
+                statusEl.textContent = "Click to play audio.";
+                // If autoplay blocked, maybe show a button? For now, just trigger callback
+                if (onEndCallback) onEndCallback();
+            });
+        }
+
+        // Preload voices
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+        };
+
+    </script>
+</body>
+
+</html>
