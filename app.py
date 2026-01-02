@@ -377,10 +377,11 @@ def get_ai_response(user_text):
 
 
 
+
         # 2. Call Gemini
         # Use a model known for good multilingual support
         model = genai.GenerativeModel(
-            "gemini-2.0-flash", # Switch to correct 2.0 flash
+            "gemini-2.0-flash-lite-preview-02-05", # Switch to Lite for better quota
             system_instruction=formatted_system_prompt
         )
         
